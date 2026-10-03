@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pizza Clicker</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:linear-gradient(135deg,#151515,#3b1708);color:#fff;min-height:100vh}
+#game{max-width:1100px;margin:auto;padding:18px}.top{background:#21140e;border:2px solid #ff9d22;border-radius:18px;padding:16px;box-shadow:0 8px 30px #0008}
+h1{margin:0 0 12px;font-size:34px}.stats{display:flex;gap:10px;flex-wrap:wrap}.stat{background:#332017;padding:10px 14px;border-radius:12px}.stat b{color:#ffd15c}
+.tabs{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap}.tab{border:0;border-radius:12px;padding:12px 18px;background:#4b2a18;color:#fff;font-weight:bold;cursor:pointer}.tab.active,.tab:hover{background:#e97819}
+.page{display:none;background:#21140e;border-radius:18px;padding:22px;border:2px solid #63341b}.page.active{display:block}
+.pizzaArea{text-align:center;padding:20px}.pizza{font-size:170px;border:0;background:none;cursor:pointer;filter:drop-shadow(0 12px 10px #0008);transition:.08s}.pizza:active{transform:scale(.9)}
+.float{position:fixed;pointer-events:none;font-size:24px;font-weight:800;color:#ffd15c;text-shadow:0 2px 5px #000;animation:floatUp .8s ease-out forwards;z-index:99}@keyframes floatUp{to{transform:translateY(-90px);opacity:0}}.hint{color:#ffc66d}
+.customer{margin-top:20px;background:#302019;border-radius:16px;padding:18px;border:1px solid #79401e}.customer button,.buy{border:0;border-radius:10px;padding:10px 14px;background:#f18a22;color:#fff;font-weight:bold;cursor:pointer}.customer button:disabled,.buy:disabled{opacity:.4;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.card{background:#302019;border:1px solid #70401f;border-radius:14px;padding:15px}.card h3{margin:0 0 8px}.price{color:#ffd15c;font-weight:bold}.small{color:#bbb;font-size:14px;min-height:38px}.notice{margin:12px 0;padding:10px;border-radius:10px;background:#412613;color:#ffd78a}.levelBox{margin:14px auto 0;max-width:620px;text-align:left}.levelLine{display:flex;justify-content:space-between;font-weight:bold;margin-bottom:7px}.bar{height:22px;background:#180f0a;border-radius:999px;overflow:hidden;border:1px solid #70401f}.barFill{height:100%;width:0;background:linear-gradient(90deg,#e97819,#ffd15c);transition:width .15s}.levelSub{display:flex;justify-content:space-between;margin-top:7px;color:#bbb;font-size:14px}
+</style>
+</head>
+<body>
+<div id="game">
+<div class="top">
+<h1>🍕 Pizza Clicker</h1>
+<div class="stats">
+<div class="stat">💷 Money: <b id="money">120</b></div>
+<div class="stat">🍕 Pizzas: <b id="pizzas">0</b></div>
+<div class="stat">⭐ Level: <b id="level">1</b></div>
+<div class="stat">⚙️ Auto income: <b id="auto">£0/s</b></div>
+</div>
+</div>
+<div class="tabs">
+<button class="tab active" data-page="home">🍕 Pizzeria</button>
+<button class="tab" data-page="shop">🛒 Visit Shop</button>
+<button class="tab" data-page="chefs">👨‍🍳 Chefs</button>
+<button class="tab" data-page="upgrades">⚡ Upgrades</button>
+</div>
+
+<section id="home" class="page active">
+<div class="pizzaArea">
+<button id="pizza" class="pizza" title="Click the pizza!">🍕</button>
+<h2>Click the pizza!</h2>
+<p class="hint">Every click gives you pizzas and money. Your pizza stock is separate from your level progress.</p><div class="levelBox"><div class="levelLine"><span>⭐ Level <span id="levelBarLevel">1</span> progress</span><span id="levelProgressText">0 / 100</span></div><div class="bar"><div id="levelFill" class="barFill"></div></div><div class="levelSub"><span>🍕 Made this level: <b id="levelMade">0</b></span><span>🍕 In stock: <b id="stockBelow">0</b></span></div></div>
+<div id="notice" class="notice">Welcome to your pizzeria!</div>
+</div>
+<div class="customer">
+<h2 id="customerTitle">👤 Customer arriving...</h2>
+<p id="customerText">A customer will arrive shortly.</p>
+<button id="serve" disabled>Serve Customer</button>
+</div>
+</section>
+
+<section id="shop" class="page"><h2>🛒 Pizzeria Shop</h2><p>Buy anything as many times as you want. Prices never increase.</p><div id="shopGrid" class="grid"></div></section>
+<section id="chefs" class="page"><h2>👨‍🍳 Hire Chefs</h2><p>Chefs work automatically. You can hire each chef repeatedly at the same price.</p><div id="chefGrid" class="grid"></div></section>
+<section id="upgrades" class="page"><h2>⚡ Permanent Upgrades</h2><div id="upgradeGrid" class="grid"></div></section>
+</div>
+
+<script>
+const state={money:120,pizzas:0,level:1,levelPizzas:0,clickPizza:1,clickMoney:1,autoMoney:0,autoPizza:0,customer:null,customerTimer:null};
+const shop=[
+["Bigger Oven",50,"+1 money per click",()=>state.clickMoney++],
+["Premium Cheese",100,"+1 pizza per click",()=>state.clickPizza++],
+["Spicy Peppers",180,"+2 money per click",()=>state.clickMoney+=2],
+["Oak Counter",300,"Customers pay 15% more",()=>state.customerBonus=(state.customerBonus||1)*1.15],
+["Mega Fridge",500,"Customers arrive faster",()=>state.arrivalFast=(state.arrivalFast||0)+1],
+["Soda Machine",750,"Customers pay +£5",()=>state.flatPay=(state.flatPay||0)+5],
+["Extra Table",1100,"Customers can order bigger pizzas",()=>state.bigOrders=(state.bigOrders||0)+1],
+["Jukebox",1600,"Tips are worth more",()=>state.tipBonus=(state.tipBonus||1)*1.08],
+["Delivery Bike",2400,"Unlock delivery jobs",()=>state.delivery=true],
+["Dough Mixer",3500,"+2 pizzas per click",()=>state.clickPizza+=2],
+["Pizza Robot",5000,"+£3 automatic income/sec",()=>state.autoMoney+=3],
+["Pizza Garden",7000,"Customers pay 25% more",()=>state.customerBonus=(state.customerBonus||1)*1.25],
+["Arcade Machine",9500,"Chance of a bonus on clicks",()=>state.arcade=(state.arcade||0)+.08],
+["Golden Oven",14000,"+10 money per click",()=>state.clickMoney+=10],
+["Delivery Drone",20000,"Delivery rewards improve",()=>state.deliveryBonus=(state.deliveryBonus||1)*1.5],
+["Pizza Lab",30000,"Experimental bonus events",()=>state.lab=true],
+["Pizza Portal",45000,"Huge event rewards",()=>state.portal=true],
+["Empire HQ",70000,"Customers order more often",()=>state.fastCustomers=true],
+["Moon Pizzeria",120000,"Massive event rewards",()=>state.moon=true],
+["Diamond Pizza",250000,"+100 money per click",()=>state.clickMoney+=100]
+];
+const chefs=[
+["Chef Luigi",600,"+1 pizza/sec",()=>state.autoPizza+=1],
+["Chef Mario",1500,"+3 pizzas/sec",()=>state.autoPizza+=3],
+["Chef Gina",4000,"+£5/sec",()=>state.autoMoney+=5],
+["Chef Antonio",10000,"+£15/sec",()=>state.autoMoney+=15],
+["Master Chef",50000,"+£100/sec",()=>state.autoMoney+=100]
+];
+const upgrades=[
+["Super Clicks",500,"+5 money per click",()=>state.clickMoney+=5],
+["Combo Master",1500,"Clicks become more valuable",()=>state.combo=(state.combo||1)+.1],
+["Famous Brand",5000,"All money earned ×1.25",()=>state.moneyMult=(state.moneyMult||1)*1.25],
+["Pizza Advertising",15000,"Customers pay 50% more",()=>state.customerBonus=(state.customerBonus||1)*1.5],
+["Legendary Pizzeria",50000,"All money earned ×2",()=>state.moneyMult=(state.moneyMult||1)*2]
+];
+
+function moneyText(n){return "£"+Math.floor(n).toLocaleString()}
+function buy(item){let [name,cost,desc,fn]=item;if(state.money<cost){flash("Not enough money for "+name+"!");return}state.money-=cost;fn();gainXP(5);flash("Bought "+name+"!");render()}
+function addLevelPizzas(n){state.levelPizzas+=n;let need=state.level*100;while(state.levelPizzas>=need){state.levelPizzas-=need;state.level++;flash("⭐ Level up! You are now level "+state.level+"!");need=state.level*100;}}
+function gainXP(n){}
+function flash(t){document.getElementById("notice").textContent=t}
+function render(){
+ document.getElementById("money").textContent=moneyText(state.money);
+ document.getElementById("pizzas").textContent=Math.floor(state.pizzas).toLocaleString();
+ document.getElementById("level").textContent=state.level;
+ document.getElementById("auto").textContent=moneyText(state.autoMoney)+"/s + "+state.autoPizza+" 🍕/s";
+ let need=state.level*100; document.getElementById("levelBarLevel").textContent=state.level; document.getElementById("levelProgressText").textContent=Math.floor(state.levelPizzas)+" / "+need; document.getElementById("levelFill").style.width=Math.min(100,(state.levelPizzas/need)*100)+"%"; document.getElementById("levelMade").textContent=Math.floor(state.levelPizzas); document.getElementById("stockBelow").textContent=Math.floor(state.pizzas);
+ document.querySelectorAll(".buy").forEach(b=>b.disabled=state.money<+b.dataset.cost);
+}
+function cards(arr,el){document.getElementById(el).innerHTML=arr.map((x,i)=>`<div class="card"><h3>${x[0]}</h3><div class="price">${moneyText(x[1])}</div><p class="small">${x[2]}</p><button class="buy" data-i="${i}" data-cost="${x[1]}">Buy</button></div>`).join("");document.getElementById(el).querySelectorAll(".buy").forEach(b=>b.onclick=()=>buy(arr[+b.dataset.i]));}
+cards(shop,"shopGrid");cards(chefs,"chefGrid");cards(upgrades,"upgradeGrid");
+
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));t.classList.add("active");document.getElementById(t.dataset.page).classList.add("active");});
+
+document.getElementById("pizza").onclick=(e)=>{
+ let p=state.clickPizza;
+ const f=document.createElement("div"); f.className="float"; f.textContent=`+${p} pizza${p===1?"":"s"}`; f.style.left=(e.clientX-25)+"px"; f.style.top=(e.clientY-25)+"px"; document.body.appendChild(f); setTimeout(()=>f.remove(),800);
+ state.pizzas+=p;
+ addLevelPizzas(p);
+ let mult=(state.moneyMult||1), m=state.clickMoney*mult;
+ if(state.arcade && Math.random()<state.arcade)m*=3;
+ state.money+=m;gainXP(1);
+ flash(`🍕 Made ${p} pizza${p>1?"s":""} and earned ${moneyText(m)}!`);
+ render();
+};
+
+function newCustomer(){
+ let max=3+(state.bigOrders||0)*2+(state.level>5?2:0);
+ let want=1+Math.floor(Math.random()*max);
+ let base=12+want*8+Math.floor(Math.random()*15)+(state.flatPay||0);
+ base*=state.customerBonus||1;
+ if(state.fastCustomers)want=Math.min(max+2,want+1);
+ state.customer={want,pay:Math.floor(base),time:18};
+ document.getElementById("customerTitle").textContent="👤 Customer is here!";
+ document.getElementById("customerText").textContent=`They want ${want} pizza${want===1?"":"s"} and will pay ${moneyText(base)}.`;
+ document.getElementById("serve").disabled=false;
+ render();
+}
+document.getElementById("serve").onclick=()=>{
+ if(!state.customer)return;
+ let c=state.customer;
+ if(state.pizzas<c.want){flash(`You need ${c.want-state.pizzas} more pizza${c.want-state.pizzas===1?"":"s"}!`);return}
+ state.pizzas-=c.want;
+ let reward=c.pay*(state.moneyMult||1);
+ state.money+=reward;gainXP(20);
+ flash(`🎉 Served customer! +${moneyText(reward)}`);
+ state.customer=null;
+ document.getElementById("serve").disabled=true;
+ document.getElementById("customerTitle").textContent="⏳ Next customer coming soon...";
+ document.getElementById("customerText").textContent="Someone else will arrive shortly.";
+ render();
+ scheduleCustomer();
+};
+function scheduleCustomer(){clearTimeout(state.customerTimer);let delay=(state.fastCustomers?2500:4000)+Math.random()*(state.fastCustomers?2500:4500);state.customerTimer=setTimeout(newCustomer,delay)}
+setInterval(()=>{if(state.autoMoney)state.money+=state.autoMoney*(state.moneyMult||1);if(state.autoPizza){state.pizzas+=state.autoPizza;addLevelPizzas(state.autoPizza)}render()},1000);
+scheduleCustomer();render();
+</script>
+</body>
+</html>
